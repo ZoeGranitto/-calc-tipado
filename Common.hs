@@ -28,7 +28,7 @@ module Common where
   data LamTerm  =  LVar String
                 |  LAbs String Type LamTerm
                 |  LApp LamTerm LamTerm
-                -- Sección 8
+                {- -- Sección 8
                 |  LLet String LamTerm LamTerm
                 -- naturales 
                 |  LZero
@@ -36,7 +36,7 @@ module Common where
                 |  LRec LamTerm LamTerm LamTerm
                 -- listas
                 |  LNil
-                |  LCons LamTerm LamTerm
+                |  LCons LamTerm LamTerm -}
                 deriving (Show, Eq)
 
 
@@ -45,7 +45,7 @@ module Common where
              | Free Name 
              | Term :@: Term
              | Lam Type Term
-             -- Sección 8
+             {- -- Sección 8
              | Let Term Term
              -- naturales
              | Zero
@@ -53,7 +53,7 @@ module Common where
              | Rec Term Term Term
              -- listas
              | Nil
-             | Cons Term Term
+             | Cons Term Term -}
           deriving (Show, Eq)
 
   -- Valores

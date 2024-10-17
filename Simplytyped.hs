@@ -19,11 +19,17 @@ import           Common
 -----------------------
 -- conversion
 -----------------------
+aux z n = \b -> if b == z then n else (aux z (n+1))
+
+conversion' (LVar x)     = aux x 0
+conversion' (LAbs x t l) = \y -> (Lam t ((conversion' l) x))
+conversion' (LApp l1 l2) = \x -> ((conversion' l1) x) :@: ((conversion' l2) x) 
 
 -- conversion a términos localmente sin nombres
 conversion :: LamTerm -> Term
-conversion = undefined
-
+conversion (LVar x)     = Free x
+conversion (LAbs x t l) = Lam t (f x) where f = conversion' l
+conversion (LApp l1 l2) = (conversion l1) :@: (conversion l2)
 ----------------------------
 --- evaluador de términos
 ----------------------------
