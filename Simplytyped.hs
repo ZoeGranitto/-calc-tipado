@@ -19,17 +19,21 @@ import           Common
 -----------------------
 -- conversion
 -----------------------
-aux z n = \b -> if b == z then n else (aux z (n+1))
-
-conversion' (LVar x)     = aux x 0
-conversion' (LAbs x t l) = \y -> (Lam t ((conversion' l) x))
-conversion' (LApp l1 l2) = \x -> ((conversion' l1) x) :@: ((conversion' l2) x) 
+var:: Name -> String -> Int -> Term
+var (Global y) x n = if ((compare x y) == EQ) then (Bound n) else (Free (Global y))
 
 -- conversion a términos localmente sin nombres
 conversion :: LamTerm -> Term
-conversion (LVar x)     = Free x
-conversion (LAbs x t l) = Lam t (f x) where f = conversion' l
+conversion (LVar x)     = Free (Global x)
 conversion (LApp l1 l2) = (conversion l1) :@: (conversion l2)
+conversion (LAbs x t l) = Lam t (f (conversion l) x 0)
+
+f :: Term -> String -> Int -> Term 
+f (Bound i) _ _ = Bound i
+f (Free y) x n     = var y x n
+f (l1 :@: l2) x n = (f l1 x n) :@: (f l2 x n)
+f (Lam t l') x n = Lam t (f l' x (n+1))
+
 ----------------------------
 --- evaluador de términos
 ----------------------------
