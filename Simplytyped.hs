@@ -61,21 +61,18 @@ searchEnv n env = quote v where (Just (v,t)) = lookup n env
 -- evalúa un término en un entorno dado
 -- preguntar que hacer con Bound
 eval :: NameEnv Value Type -> Term -> Value 
-eval env (Let (Lam t e) t2)      = eval' env (sub 0 t2 (Lam t e))                    -- E-LetV
+eval env (Let (Lam t e) t2)      = eval env (sub 0 t2 (Lam t e))                    -- E-LetV
 eval env (Let t1 t2)             = eval env (Let (quote (eval env t1)) t2)           -- E-Let
 eval env ((Free e)       :@: t2) = eval env (searchEnv e env :@: t2)                 -- E-App1
 eval env ((Let u v)      :@: t2) = eval env (quote (eval env (Let u v)) :@: t2)      -- E-App1
 eval env ((t1' :@: t1'') :@: t2) = eval env (quote (eval env (t1' :@: t1'')) :@: t2) -- E-App1
 eval env (t1@(Lam t e)   :@: t2) = case t2 of                                        
   (Free e')      -> eval env (t1 :@: (searchEnv e' env))                             -- E-App2
-  (Lam t' e')    -> eval' env (sub 0 t2 e)                                           -- E-AppAbs
+  (Lam t' e')    -> eval env (sub 0 t2 e)                                           -- E-AppAbs
   _ -> eval env (t1 :@: quote (eval env t2))                                         -- E-App2
-
--- función auxiliar
-eval' :: NameEnv Value Type -> Term -> Value
-eval' env x@(Lam _ _) = termToVal x
-eval' env (Free e)    = eval' env (searchEnv e env)
-eval' env t           = eval env t
+eval env (Free x) = eval env (searchEnv x env)
+eval env t1@(Lam t e) = termToVal t1
+-- eval env (Bound i) = error
 
 ----------------------
 --- type checker
