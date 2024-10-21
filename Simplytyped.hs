@@ -29,6 +29,9 @@ conv list (LVar x)     = if (i == -1 ) then Free (Global x) else Bound i where i
 conv list (LApp l1 l2) = (conv list l1) :@: (conv list l2)
 conv list (LAbs x t l) = Lam t (conv (x:list) l)
 conv list (LLet x u v) = Let (conv list u) (conv (x:list) v)
+conv list (LZero)      = Zero 
+conv list (LSuc l)     = Suc (conv list l)
+conv list (LRec x u v) = Rec (conv list x) (conv list u) (conv list v)
 
 -- función que devuelve el índice del elemento en la lista, o -1 si no se encuentra en la misma.
 inList :: String -> [String] -> Int
@@ -47,6 +50,10 @@ sub _ _ (Bound j) | otherwise = Bound j
 sub _ _ (Free n   )           = Free n
 sub i t (u   :@: v)           = sub i t u :@: sub i t v
 sub i t (Lam t'  u)           = Lam t' (sub (i + 1) t u)
+sub i t (Let u   v)           = Let (sub i t u) (sub (i + 1) t v)
+sub i t (Zero)                = Zero
+sub i t (Suc n)               = Suc (sub i t n)
+sub i t (Rec x u v)           = Rec (sub i t x) (sub i t u) (sub i t v)
 
 -- convierte un valor en el término equivalente
 quote :: Value -> Term
@@ -60,19 +67,27 @@ searchEnv n env = quote v where (Just (v,t)) = lookup n env
 
 -- evalúa un término en un entorno dado
 -- preguntar que hacer con Bound
+-- evalúa un término en un entorno dado
+-- preguntar que hacer con Bound
 eval :: NameEnv Value Type -> Term -> Value 
-eval env (Let (Lam t e) t2)      = eval env (sub 0 t2 (Lam t e))                    -- E-LetV
-eval env (Let t1 t2)             = eval env (Let (quote (eval env t1)) t2)           -- E-Let
-eval env ((Free e)       :@: t2) = eval env (searchEnv e env :@: t2)                 -- E-App1
-eval env ((Let u v)      :@: t2) = eval env (quote (eval env (Let u v)) :@: t2)      -- E-App1
-eval env ((t1' :@: t1'') :@: t2) = eval env (quote (eval env (t1' :@: t1'')) :@: t2) -- E-App1
-eval env (t1@(Lam t e)   :@: t2) = case t2 of                                        
-  (Free e')      -> eval env (t1 :@: (searchEnv e' env))                             -- E-App2
-  (Lam t' e')    -> eval env (sub 0 t2 e)                                           -- E-AppAbs
-  _ -> eval env (t1 :@: quote (eval env t2))                                         -- E-App2
-eval env (Free x) = eval env (searchEnv x env)
-eval env t1@(Lam t e) = termToVal t1
--- eval env (Bound i) = error
+eval env (Free x)           = eval env (searchEnv x env)                                        
+eval env (Bound i)          = error "mal tipo en bound"
+eval env t1@(Lam t e)       = termToVal t1                                                                                         
+eval env (Let (Lam t e) t2) = eval env (sub 0 t2 (Lam t e))                           -- E-LetV
+eval env (Let t1 t2)        = eval env (Let (quote (eval env t1)) t2)                 -- E-Let
+eval env (t1@(Lam t e) :@: t2@(Lam t' e')) = eval env (sub 0 t2 e)                    -- E-AppAbs
+eval env (t1@(Lam t e) :@: t2) = eval env (t1 :@: (quote (eval env t2)))              -- E-App2
+eval env (t1 :@: t2)           = eval env (quote (eval env t1) :@: t2)                -- E-App1
+eval env Zero                  = VNum NZero
+eval env (Suc e)               = case a of
+  VNum numval -> VNum (NSuc numval)
+  _           -> error "mal tipo en suc"
+  where a = eval env e
+eval env (Rec e1 e2 e3)        = case e3 of
+  Zero    -> eval env e1                                                              -- E-RZero
+  (Suc e) -> eval env (e2 :@: (Rec e1 e2 e) :@: e)                                      -- E-RSucc
+  _       -> eval env (Rec e1 e2 (quote (eval env e3)))                                 -- E-R
+
 
 ----------------------
 --- type checker
@@ -121,3 +136,12 @@ infer' c e (t :@: u) = infer' c e t >>= \tt -> infer' c e u >>= \tu -> -- >>= es
     _          -> notfunError tt
 infer' c e (Lam t u) = infer' (t : c) e u >>= \tu -> ret $ FunT t tu
 infer' c e (Let u v) = infer' c e u >>= \tu -> infer' (tu:c) e v 
+infer' c e Zero      = ret NatT
+infer' c e (Suc u)   = case infer' c e u of 
+  Right NatT -> ret NatT
+  Right t    -> matchError NatT t
+  Left e     -> Left e
+infer' c e (Rec e1 e2 e3) = infer' c e e1 >>= \t1 -> infer' c e e2 >>= \t2 -> infer' c e e3 >>= \t3 ->
+  case t2 of 
+    FunT (FunT tu NatT) tv -> if (tu == t1 && tu == tv) then (if (t3 == NatT) then ret t1 else matchError NatT t3) else matchError t1 tu
+    _                      -> notfunError t2

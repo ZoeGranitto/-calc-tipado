@@ -40,14 +40,6 @@ module Common where
                 deriving (Show, Eq)
 
 
-  -- Let x = \y.y in \a.xa 
-  -- LLet "x" (LAbs "y" t (LVar "y")) (LAbs "a" t' (LApp (LVar "x") (LVar "a")))
-  -- conversion []    t1 --> Lam t (Bound 0)
-  -- conversion ["x"] t2 --> Lam t' (conversion' ["a", "x"] (LApp (LVar "x") (LVar "a")))
-  -- Let (Lam t (Bound 0)) (Lam t' ((Bound 1) :@: (Bound 0)))
-  -- 
-
-
   -- Términos localmente sin nombres
   data Term  = Bound Int
              | Free Name 
