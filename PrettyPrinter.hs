@@ -44,6 +44,20 @@ pp ii vs (Let u v) =
     <> pp ii vs u
     <> text " in "
     <> pp (ii + 1) vs v
+pp ii vs (Zero     ) = text "Zero"
+pp ii vs (Nil      ) = text "Nil"
+pp ii vs (Suc u    ) = 
+  text "Suc"
+    <> pp ii vs u
+pp ii vs (Rec u v w) = 
+  text "Rec"
+    <> pp ii vs u
+    <> pp ii vs v
+    <> pp ii vs w
+pp ii vs (Cons u v ) = 
+  text "Cons"
+    <> pp ii vs u 
+    <> pp ii vs v
 
 isLam :: Term -> Bool
 isLam (Lam _ _) = True
@@ -58,18 +72,22 @@ printType :: Type -> Doc
 printType EmptyT = text "E"
 printType (FunT t1 t2) =
   sep [parensIf (isFun t1) (printType t1), text "->", printType t2]
-
+printType NatT = text "N"
+printType ListT = text "List"
 
 isFun :: Type -> Bool
 isFun (FunT _ _) = True
 isFun _          = False
 
 fv :: Term -> [String]
-fv (Bound _         ) = []
 fv (Free  (Global n)) = [n]
 fv (t   :@: u       ) = fv t ++ fv u
 fv (Lam _   u       ) = fv u
-
+fv (Let u v         ) = fv u ++ fv v
+fv (Suc u           ) = fv u 
+fv (Rec u v w       ) = fv u ++ fv v ++ fv w 
+fv (Cons u v        ) = fv u ++ fv v
+fv  _                 = [] -- Bound, Zero, Nil
 ---
 printTerm :: Term -> Doc
 printTerm t = pp 0 (filter (\v -> not $ elem v (fv t)) vars) t

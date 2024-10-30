@@ -32,6 +32,8 @@ conv list (LLet x u v) = Let (conv list u) (conv (x:list) v)
 conv list (LZero)      = Zero 
 conv list (LSuc l)     = Suc (conv list l)
 conv list (LRec x u v) = Rec (conv list x) (conv list u) (conv list v)
+conv list (LNil)       = Nil
+conv list (LCons u v)  = Cons (conv list u) (conv list v)
 
 -- función que devuelve el índice del elemento en la lista, o -1 si no se encuentra en la misma.
 inList :: String -> [String] -> Int
@@ -54,6 +56,7 @@ sub i t (Let u   v)           = Let (sub i t u) (sub (i + 1) t v)
 sub i t (Zero)                = Zero
 sub i t (Suc n)               = Suc (sub i t n)
 sub i t (Rec x u v)           = Rec (sub i t x) (sub i t u) (sub i t v)
+sub i t 
 
 -- convierte un valor en el término equivalente
 quote :: Value -> Term
@@ -85,8 +88,8 @@ eval env (Suc e)               = case a of
   where a = eval env e
 eval env (Rec e1 e2 e3)        = case e3 of
   Zero    -> eval env e1                                                              -- E-RZero
-  (Suc e) -> eval env (e2 :@: (Rec e1 e2 e) :@: e)                                      -- E-RSucc
-  _       -> eval env (Rec e1 e2 (quote (eval env e3)))                                 -- E-R
+  (Suc e) -> eval env (e2 :@: (Rec e1 e2 e) :@: e)                                    -- E-RSucc
+  _       -> eval env (Rec e1 e2 (quote (eval env e3)))                               -- E-R
 
 
 ----------------------
