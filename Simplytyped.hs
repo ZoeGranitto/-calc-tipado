@@ -25,15 +25,16 @@ conversion :: LamTerm -> Term
 conversion = conv []
 
 conv :: [String] -> LamTerm -> Term
-conv list (LVar x)     = if (i == -1 ) then Free (Global x) else Bound i where i = inList x list
-conv list (LApp l1 l2) = (conv list l1) :@: (conv list l2)
-conv list (LAbs x t l) = Lam t (conv (x:list) l)
-conv list (LLet x u v) = Let (conv list u) (conv (x:list) v)
-conv list (LZero)      = Zero 
-conv list (LSuc l)     = Suc (conv list l)
-conv list (LRec x u v) = Rec (conv list x) (conv list u) (conv list v)
-conv list (LNil)       = Nil
-conv list (LCons u v)  = Cons (conv list u) (conv list v)
+conv list (LVar x)      = if (i == -1 ) then Free (Global x) else Bound i where i = inList x list
+conv list (LApp l1 l2)  = (conv list l1) :@: (conv list l2)
+conv list (LAbs x t l)  = Lam t (conv (x:list) l)
+conv list (LLet x u v)  = Let (conv list u) (conv (x:list) v)
+conv list LZero         = Zero 
+conv list (LSuc l)      = Suc (conv list l)
+conv list (LRec x u v)  = Rec (conv list x) (conv list u) (conv list v)
+conv list LNil          = Nil
+conv list (LCons u v)   = Cons (conv list u) (conv list v)
+conv list (LRecL x u v) = RecL (conv list x) (conv list u) (conv list v)
 
 -- función que devuelve el índice del elemento en la lista, o -1 si no se encuentra en la misma.
 inList :: String -> [String] -> Int
@@ -54,10 +55,11 @@ sub i t (u   :@: v)           = sub i t u :@: sub i t v
 sub i t (Lam t'  u)           = Lam t' (sub (i + 1) t u)
 sub i t (Let u   v)           = Let (sub i t u) (sub (i + 1) t v)
 sub i t Zero                  = Zero
-sub i t Nil                   = Nil
 sub i t (Suc n)               = Suc (sub i t n)
-sub i t (Cons n lv)           = Cons (sub i t n) (sub i t lv)
 sub i t (Rec x u v)           = Rec (sub i t x) (sub i t u) (sub i t v)
+sub i t Nil                   = Nil
+sub i t (Cons n lv)           = Cons (sub i t n) (sub i t lv)
+sub i t (RecL x u v)          = RecL (sub i t x) (sub i t u) (sub i t v)
 
 -- convierte un valor en el término equivalente
 quote :: Value -> Term
@@ -96,20 +98,21 @@ eval env (t1 :@: t2)           = eval env (quote (eval env t1) :@: t2)          
 eval env Zero                  = VNum NZero
 eval env Nil                   = VList VNil
 eval env (Cons n lv)           = case (a,b) of
-  (VNum numval, VList listval) -> VList (VCons numval listval)
+  (VNum numval, VList listval) -> VList (VCons numval listval)                        -- E-Cons1 E-Cons2
   _                            -> error "mal tipo en cons"
   where (a,b) = (eval env n, eval env lv)
 eval env (Suc e)               = case a of
   VNum numval -> VNum (NSuc numval)
   _           -> error "mal tipo en suc"
   where a = eval env e
-eval env (Rec e1 e2 e3)        = case e3 of
-  Zero        -> eval env e1                          
-  Nil         -> eval env e1                                    -- E-RZero
-  (Suc e)     -> eval env (e2 :@: (Rec e1 e2 e) :@: e)  
-  (Cons n lv) -> eval env (e2 :@: n :@: lv :@: (Rec e1 e2 lv))                                  -- E-RSucc
-  _           -> eval env (Rec e1 e2 (quote (eval env e3)))                               -- E-R
-
+eval env (Rec e1 e2 e3)        = case e3 of      
+  Zero        -> eval env e1                                                          -- E-RZero                       
+  (Suc e)     -> eval env (e2 :@: (Rec e1 e2 e) :@: e)                                -- E-RSucc
+  _           -> eval env (Rec e1 e2 (quote (eval env e3)))                           -- E-R
+eval env (RecL e1 e2 e3)        = case e3 of
+  Nil         -> eval env e1                                                          -- E-RNil
+  (Cons n lv) -> eval env (e2 :@: n :@: lv :@: (RecL e1 e2 lv))                       -- E-RCons
+  _           -> eval env (RecL e1 e2 (quote (eval env e3)))                          -- E-RL
 
 ----------------------
 --- type checker
@@ -172,6 +175,9 @@ infer' c e (Cons u v) = infer' c e u >>= \t1 -> infer' c e v >>= \t2 ->
     _    -> matchError NatT t1
 infer' c e (Rec e1 e2 e3) = infer' c e e1 >>= \t1 -> infer' c e e2 >>= \t2 -> infer' c e e3 >>= \t3 ->
   case t2 of 
-    FunT (FunT tu NatT) tv              -> if (tu == t1 && tu == tv) then (if (t3 == NatT) then ret t1 else matchError NatT t3) else matchError t1 tu
-    FunT (FunT (FunT NatT ListT) tu) tv -> if (tu == t1 && tu == tv) then (if (t3 == ListT) then ret t1 else matchError ListT t3) else matchError t1 tu
+    FunT tu (FunT NatT tv)              -> if (tu == t1 && tu == tv) then (if (t3 == NatT) then ret t1 else matchError NatT t3) else matchError t1 tu
+    _                                   -> notfunError t2
+infer' c e (RecL e1 e2 e3) = infer' c e e1 >>= \t1 -> infer' c e e2 >>= \t2 -> infer' c e e3 >>= \t3 ->
+  case t2 of 
+    FunT NatT (FunT ListT (FunT tu tv)) -> if (tu == t1 && tu == tv) then (if (t3 == ListT) then ret t1 else matchError ListT t3) else matchError t1 tu
     _                                   -> notfunError t2

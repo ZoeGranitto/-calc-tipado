@@ -56,7 +56,7 @@ Exp     :: { LamTerm }
         | "Suc" Exp                    { LSuc $2 }
         | "R" Atom Atom Exp            { LRec $2 $3 $4 }
         | "Cons" Exp Exp               { LCons $2 $3 }
-        | "RL" Atom Atom Exp           { LRec $2 $3 $4 }
+        | "RL" Atom Atom Exp           { LRecL $2 $3 $4 }
         | NAbs                         { $1 }
 
 NAbs    :: { LamTerm }
