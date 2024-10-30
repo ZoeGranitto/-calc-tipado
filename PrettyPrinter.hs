@@ -38,17 +38,18 @@ pp ii vs (Lam t c) =
     <> text ". "
     <> pp (ii + 1) vs c
 pp ii vs (Let u v) = 
-  text "Let " 
+  text "let " 
     <> text (vs !! ii)
     <> text " = "
     <> pp ii vs u
     <> text " in "
     <> pp (ii + 1) vs v
-pp ii vs (Zero     ) = text "Zero"
-pp ii vs (Nil      ) = text "Nil"
-pp ii vs (Suc u    ) = 
-  text "Suc "
-    <> parensIf (isnotZero u) (pp ii vs u)
+pp ii vs (Zero ) = text "0"
+pp ii vs (Nil  ) = text "nil"
+pp ii vs (Suc u) = 
+  parensIf True (
+    text "suc "
+    <> (pp ii vs u))
 pp ii vs (Rec u v w) = 
   text "R "
     <> pp ii vs u
@@ -63,10 +64,11 @@ pp ii vs (RecL u v w) =
     <> parensIf True (pp ii vs v)
     <> text " "
     <> pp ii vs w
-pp ii vs (Cons u v ) = 
-  text "Cons "
+pp ii vs (Cons u v) = 
+  text "cons "
     <> pp ii vs u 
-    <> pp ii vs v
+    <> text " "
+    <> parensIf (isNotNil v) (pp ii vs v)
 
 isLam :: Term -> Bool
 isLam (Lam _ _) = True
@@ -76,9 +78,9 @@ isApp :: Term -> Bool
 isApp (_ :@: _) = True
 isApp _         = False
 
-isnotZero :: Term -> Bool
-isnotZero Zero = False
-isnotZero _    = True
+isNotNil :: Term -> Bool
+isNotNil Nil = False
+isNotNil _    = True
 
 -- pretty-printer de tipos
 printType :: Type -> Doc

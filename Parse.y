@@ -33,6 +33,7 @@ import Data.Char
     VAR     { TVar $$ }
     TYPEE   { TTypeE }
     TYPEN   { TTypeN }
+    TYPELN  { TTypeLN }
     DEF     { TDef }
     
 
@@ -55,7 +56,7 @@ Exp     :: { LamTerm }
         | "Let" VAR '=' Exp "in" Exp   { LLet $2 $4 $6 }
         | "Suc" Exp                    { LSuc $2 }
         | "R" Atom Atom Exp            { LRec $2 $3 $4 }
-        | "Cons" Exp Exp               { LCons $2 $3 }
+        | "Cons" Atom Exp              { LCons $2 $3 }
         | "RL" Atom Atom Exp           { LRecL $2 $3 $4 }
         | NAbs                         { $1 }
 
@@ -71,6 +72,7 @@ Atom    :: { LamTerm }
 
 Type    : TYPEE                        { EmptyT }
         | TYPEN                        { NatT }
+        | TYPELN                       { ListT }
         | Type '->' Type               { FunT $1 $3 }
         | '(' Type ')'                 { $2 }
 
@@ -109,6 +111,7 @@ happyError = \ s i -> Failed $ "Línea "++(show (i::LineNumber))++": Error de pa
 data Token = TVar String
                | TTypeE
                | TTypeN
+               | TTypeLN
                | TDef
                | TAbs
                | TLet
@@ -153,6 +156,7 @@ lexer cont s = case s of
                               ("in",rest)   -> cont TIn rest
                               ("E",rest)    -> cont TTypeE rest
                               ("N",rest)    -> cont TTypeN rest
+                              ("LN",rest)   -> cont TTypeLN rest
                               ("def",rest)  -> cont TDef rest
                               ("R",rest)    -> cont TR rest
                               ("Zero",rest) -> cont TZero rest
