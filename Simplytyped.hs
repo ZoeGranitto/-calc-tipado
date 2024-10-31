@@ -24,7 +24,7 @@ import           Common
 conversion :: LamTerm -> Term
 conversion = conv []
 
--- función auxiliar de conversion
+-- función de conversion, utiliza una lista para manejar las ligaduras
 conv :: [String] -> LamTerm -> Term
 conv list (LVar x)      = if (i == -1 ) then Free (Global x) else Bound i where i = inList x list
 conv list (LApp l1 l2)  = (conv list l1) :@: (conv list l2)
@@ -62,7 +62,7 @@ sub i t Nil                   = Nil
 sub i t (Cons n lv)           = Cons (sub i t n) (sub i t lv)
 sub i t (RecL x u v)          = RecL (sub i t x) (sub i t u) (sub i t v)
 
--- convierte un valor en el término equivalente
+-- convierte un valor en su término equivalente
 quote :: Value -> Term
 quote (VLam t f)           = Lam t f
 quote (VNum NZero)         = Zero
@@ -70,7 +70,7 @@ quote (VNum (NSuc n))      = Suc (quote (VNum n))
 quote (VList VNil)         = Nil
 quote (VList (VCons n lv)) = Cons (quote (VNum n)) (quote (VList lv))
 
--- convierte un término en el valor equivalente
+-- convierte un término en su valor equivalente
 termToVal :: Term -> Value
 termToVal (Lam t f)   = VLam t f
 termToVal Zero        = (VNum NZero)        
@@ -82,14 +82,11 @@ termToVal (Cons n lv) = case ((termToVal n), (termToVal lv)) of
   ((VNum a), (VList b)) -> (VList (VCons a b))
   _                     -> error "se esperaba una lista de valores numéricos"
 
+-- devuelve el termino asociado a un valor guardado en el environment
 searchEnv :: Name -> NameEnv Value Type -> Term
 searchEnv n env = quote v where (Just (v,t)) = lookup n env
 
--- evalúa un término en un entorno dado
-eval :: NameEnv Value Type -> Term -> Value 
-eval env t = termToVal (eval' env t)
-
--- determina si el término es una lista, un número o una abstracción.
+-- determina si el término es una lista, número o abstracción, o ninguno de ellos.
 isVal :: Term -> Bool
 isVal (Lam _ _)   = True
 isVal Zero        = True
@@ -98,7 +95,11 @@ isVal Nil         = True
 isVal (Cons _ _)  = True
 isVal _           = False
 
--- función auxiliar para el evaluador de términos
+-- evalúa un término en un entorno dado
+eval :: NameEnv Value Type -> Term -> Value 
+eval env t = termToVal (eval' env t)
+
+-- evaluador de términos siguiendo las reglas dadas 
 eval' :: NameEnv Value Type -> Term -> Term 
 eval' env (Free x)              = eval' env (searchEnv x env)                                        
 eval' env (Bound i)             = error "variable ligada fuera de la abstracción"
