@@ -24,6 +24,7 @@ import           Common
 conversion :: LamTerm -> Term
 conversion = conv []
 
+-- función auxiliar de conversion
 conv :: [String] -> LamTerm -> Term
 conv list (LVar x)      = if (i == -1 ) then Free (Global x) else Bound i where i = inList x list
 conv list (LApp l1 l2)  = (conv list l1) :@: (conv list l2)
@@ -73,46 +74,54 @@ quote (VList (VCons n lv)) = Cons (quote (VNum n)) (quote (VList lv))
 termToVal :: Term -> Value
 termToVal (Lam t f)   = VLam t f
 termToVal Zero        = (VNum NZero)        
-termToVal (Suc n)     = (VNum (NSuc a)) where (VNum a) = (termToVal n)       
+termToVal (Suc n)     = case (termToVal n) of
+  (VNum a) -> VNum (NSuc a)
+  _        -> error "se esperaba un valor numérico"        
 termToVal Nil         = (VList VNil)        
-termToVal (Cons n lv) = (VList (VCons a b)) where ((VNum a), (VList b)) = ((termToVal n), (termToVal lv))
+termToVal (Cons n lv) = case ((termToVal n), (termToVal lv)) of
+  ((VNum a), (VList b)) -> (VList (VCons a b))
+  _                     -> error "se esperaba una lista de valores numéricos"
 
 searchEnv :: Name -> NameEnv Value Type -> Term
 searchEnv n env = quote v where (Just (v,t)) = lookup n env
 
 -- evalúa un término en un entorno dado
 eval :: NameEnv Value Type -> Term -> Value 
-eval env (Free x)           = eval env (searchEnv x env)                                        
-eval env (Bound i)          = error "mal tipo en bound"
-eval env t1@(Lam t e)       = termToVal t1                                                                                         
-eval env (Let (Lam t e) t2) = eval env (sub 0 t2 (Lam t e))                           -- E-LetV
-eval env (Let t1 t2)        = eval env (Let (quote (eval env t1)) t2)                 -- E-Let
-eval env (t1@(Lam t e) :@: t2) = case t2 of
-  (Lam t' e') -> eval env (sub 0 t2 e)                                                -- E-AppAbs
-  Zero        -> eval env (sub 0 t2 e)                                                -- E-AppAbs
-  (Suc n)     -> eval env (sub 0 t2 e)                                                -- E-AppAbs
-  Nil         -> eval env (sub 0 t2 e)                                                -- E-AppAbs
-  (Cons n l)  -> eval env (sub 0 t2 e)                                                -- E-AppAbs
-  _           -> eval env (t1 :@: (quote (eval env t2)))                              -- E-App2
-eval env (t1 :@: t2)           = eval env (quote (eval env t1) :@: t2)                -- E-App1
-eval env Zero                  = VNum NZero
-eval env Nil                   = VList VNil
-eval env (Cons n lv)           = case (a,b) of
-  (VNum numval, VList listval) -> VList (VCons numval listval)                        -- E-Cons1 E-Cons2
-  _                            -> error "mal tipo en cons"
-  where (a,b) = (eval env n, eval env lv)
-eval env (Suc e)               = case a of
-  VNum numval -> VNum (NSuc numval)
-  _           -> error "mal tipo en suc"
-  where a = eval env e
-eval env (Rec e1 e2 e3)        = case e3 of      
-  Zero        -> eval env e1                                                          -- E-RZero                       
-  (Suc e)     -> eval env (e2 :@: (Rec e1 e2 e) :@: e)                                -- E-RSucc
-  _           -> eval env (Rec e1 e2 (quote (eval env e3)))                           -- E-R
-eval env (RecL e1 e2 e3)        = case e3 of
-  Nil         -> eval env e1                                                          -- E-RNil
-  (Cons n lv) -> eval env (e2 :@: n :@: lv :@: (RecL e1 e2 lv))                       -- E-RCons
-  _           -> eval env (RecL e1 e2 (quote (eval env e3)))                          -- E-RL
+eval env t = termToVal (eval' env t)
+
+-- determina si el término es una lista, un número o una abstracción.
+isVal :: Term -> Bool
+isVal (Lam _ _)   = True
+isVal Zero        = True
+isVal (Suc _)     = True
+isVal Nil         = True
+isVal (Cons _ _)  = True
+isVal _           = False
+
+-- función auxiliar para el evaluador de términos
+eval' :: NameEnv Value Type -> Term -> Term 
+eval' env (Free x)              = eval' env (searchEnv x env)                                        
+eval' env (Bound i)             = error "variable ligada fuera de la abstracción"
+eval' env t1@(Lam t e)          = t1                                                                                         
+eval' env (Let t1 t2)           = let a = eval' env (sub 0 t1 t2)                      -- E-LetV
+                                      b = eval' env (Let (eval' env t1) t2)            -- E-Let
+                                  in if (isVal t1) then a else b
+eval' env (t1@(Lam t e) :@: t2) = let a = eval' env (sub 0 t2 e)                       -- E-AppAbs
+                                      b = eval' env (t1 :@: (eval' env t2))            -- E-App2
+                                  in if (isVal t2) then a else b
+eval' env (t1 :@: t2)           = eval' env ((eval' env t1) :@: t2)                    -- E-App1
+eval' env Zero                  = Zero
+eval' env (Suc e)               = Suc (eval' env e)
+eval' env (Rec e1 e2 e3)        = case e3 of      
+  Zero        -> eval' env e1                                                          -- E-RZero                       
+  (Suc e)     -> eval' env (e2 :@: (Rec e1 e2 e) :@: e)                                -- E-RSucc
+  _           -> eval' env (Rec e1 e2 (eval' env e3))                                  -- E-R
+eval' env Nil                   = Nil
+eval' env (Cons n lv)           = Cons (eval' env n) (eval' env lv)
+eval' env (RecL e1 e2 e3)       = case e3 of
+  Nil         -> eval' env e1                                                          -- E-RNil
+  (Cons n lv) -> eval' env (e2 :@: n :@: lv :@: (RecL e1 e2 lv))                       -- E-RCons
+  _           -> eval' env (RecL e1 e2 (eval' env e3))                                 -- E-RL
 
 ----------------------
 --- type checker
@@ -152,6 +161,8 @@ notfoundError n = err $ show n ++ " no está definida."
 -- infiere el tipo de un término a partir de un entorno local de variables y un entorno global
 infer' :: Context -> NameEnv Value Type -> Term -> Either String Type
 infer' c _ (Bound i) = ret (c !! i) -- c[i]. significa que el tipo del bound esta guardado en el contexto local
+infer' c e (Lam t u) = infer' (t : c) e u >>= \tu -> ret $ FunT t tu
+infer' c e (Let u v) = infer' c e u >>= \tu -> infer' (tu : c) e v 
 infer' _ e (Free  n) = case lookup n e of -- el tipo del free está guardado en el contexto global
   Nothing     -> notfoundError n
   Just (_, t) -> ret t
@@ -159,24 +170,22 @@ infer' c e (t :@: u) = infer' c e t >>= \tt -> infer' c e u >>= \tu -> -- >>= es
   case tt of
     FunT t1 t2 -> if (tu == t1) then ret t2 else matchError t1 tu -- el tipo de t debe ser una funcion
     _          -> notfunError tt
-infer' c e (Lam t u) = infer' (t : c) e u >>= \tu -> ret $ FunT t tu
-infer' c e (Let u v) = infer' c e u >>= \tu -> infer' (tu:c) e v 
 infer' c e Zero      = ret NatT
-infer' c e Nil        = ret ListT
 infer' c e (Suc u)   = case infer' c e u of 
   Right NatT -> ret NatT
   Right t    -> matchError NatT t
   Left e     -> Left e
+infer' c e (Rec e1 e2 e3) = infer' c e e1 >>= \t1 -> infer' c e e2 >>= \t2 -> infer' c e e3 >>= \t3 ->
+  case t2 of 
+    FunT tu (FunT NatT tv) -> if (tu == t1 && tu == tv) then (if (t3 == NatT) then ret t1 else matchError NatT t3) else matchError t1 tu
+    _                      -> notfunError t2
+infer' c e Nil        = ret ListT
 infer' c e (Cons u v) = infer' c e u >>= \t1 -> infer' c e v >>= \t2 ->
   case t1 of
     NatT -> case t2 of
               ListT -> ret ListT
               _     -> matchError ListT t2
     _    -> matchError NatT t1
-infer' c e (Rec e1 e2 e3) = infer' c e e1 >>= \t1 -> infer' c e e2 >>= \t2 -> infer' c e e3 >>= \t3 ->
-  case t2 of 
-    FunT tu (FunT NatT tv)              -> if (tu == t1 && tu == tv) then (if (t3 == NatT) then ret t1 else matchError NatT t3) else matchError t1 tu
-    _                                   -> notfunError t2
 infer' c e (RecL e1 e2 e3) = infer' c e e1 >>= \t1 -> infer' c e e2 >>= \t2 -> infer' c e e3 >>= \t3 ->
   case t2 of 
     FunT NatT (FunT ListT (FunT tu tv)) -> if (tu == t1 && tu == tv) then (if (t3 == ListT) then ret t1 else matchError ListT t3) else matchError t1 tu
